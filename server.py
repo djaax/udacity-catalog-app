@@ -12,6 +12,7 @@ import json
 from flask import make_response
 import requests
 import urllib2
+from functools import wraps
 
 app = Flask(__name__)
 
@@ -28,9 +29,9 @@ DBSession = sessionmaker(bind=engine)
 session = DBSession()
 
 
-# Create anti-forgery state token
 @app.route('/login')
 def showLogin():
+    '''Create anti-forgery state token'''
     state = ''.join(
         random.choice(string.ascii_uppercase + string.digits) for x in range(32))
     login_session['state'] = state
@@ -98,7 +99,9 @@ def fbconnect():
     output += '!</h1>'
     output += '<img src="'
     output += login_session['picture']
-    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    output += ''' " style = "width: 300px; height: 300px;
+    border-radius: 150px;-webkit-border-radius: 150px;
+    -moz-border-radius: 150px;"> '''
 
     flash("Now logged in as %s" % login_session['username'])
     return output
@@ -201,7 +204,9 @@ def gconnect():
     output += '!</h1>'
     output += '<img src="'
     output += login_session['picture']
-    output += ' " style = "width: 300px; height: 300px;border-radius: 150px;-webkit-border-radius: 150px;-moz-border-radius: 150px;"> '
+    output += ''' " style = "width: 300px; height: 300px;
+    border-radius: 150px;-webkit-border-radius: 150px;
+    -moz-border-radius: 150px;"> '''
     flash("you are now logged in as %s" % login_session['username'])
     print "done!"
     return output
@@ -228,10 +233,22 @@ def getUserID(email):
     except:
         return None
 
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'username' in login_session:
+            return f(*args, **kwargs)
+        else:
+            flash("You are not allowed to access there")
+            return redirect('/login')
+    return decorated_function
 
-# DISCONNECT - Revoke a current user's token and reset their login_session
 @app.route('/gdisconnect')
 def gdisconnect():
+    '''
+    DISCONNECT - Revoke a current user's token and reset
+    their login_session
+    '''
     # Only disconnect a connected user.
     access_token = login_session.get('access_token')
     print(access_token)
@@ -253,9 +270,11 @@ def gdisconnect():
         response.headers['Content-Type'] = 'application/json'
         return response
 
-# Send Catalog Data as JSON
 @app.route('/catalog.json')
-def sendJSON():
+def sendCatalogJSON():
+    '''
+    Send Catalog Data as JSON
+    '''
     categories = []
     for c in session.query(Category).order_by(asc(Category.id)):
         items = session.query(CategoryItem).filter_by(category_id=c.id)
@@ -268,53 +287,62 @@ def sendJSON():
 
     return jsonify(Categories=categories)
 
+@app.route('/catalog/<string:item_name>.json')
+def sendItemJSON(item_name):
+    '''
+    Send Item Data as JSON
+    '''
+    item = session.query(CategoryItem).filter_by(name=item_name).one()
+    return jsonify(Item=item.serialize)
 
-# Display All Categories (Sidebar) and Latest Items (Main)
-# Logged In: Add
 @app.route('/')
 @app.route('/catalog/')
 def showCategories():
+    '''
+    Display All Categories (Sidebar) and Latest Items (Main)
+    Logged In: Add
+    '''
     categories = session.query(Category).order_by(asc(Category.id))
     latest_items = session.query(CategoryItem)
     
-    if 'username' not in login_session:
-        return render_template('categories.html', categories=categories, latest_items=latest_items)
-    else:
-        return render_template('categories.html', categories=categories, latest_items=latest_items)
+    return render_template('categories.html', categories=categories, latest_items=latest_items)
 
 
-# Display All Categories (Sidebar) and Category Items (Main)
-# Logged In: Edit, Delete
 @app.route('/catalog/<string:category_name>/items')
 def showCategory(category_name):
+    '''
+    Display All Categories (Sidebar) and Category Items (Main)
+    Logged In: Edit, Delete
+    '''
     categories = session.query(Category).order_by(asc(Category.id))
     category = session.query(Category).filter_by(name=urllib2.unquote(category_name)).one()
     items = session.query(CategoryItem).filter_by(category_id=category.id)
-    return render_template('category_item_list.html', categories=categories, items=items, category=category)
+    return render_template('category_item_list.html',
+        categories=categories, items=items, category=category)
 
-
-# Display title and details about this item
 @app.route('/catalog/<string:category_name>/<string:item_name>')
 def showItem(category_name, item_name):
-    if 'username' not in login_session:
-        return redirect('/login')
-
+    '''
+    Display title and details about this item
+    '''
     item = session.query(CategoryItem).filter_by(name=item_name).one()
     return render_template('category.html', item=item)
 
-
-# GET: Display Edit Form
-# POST: Update Item
 @app.route('/catalog/<string:item_name>/edit', methods=['GET', 'POST'])
+@login_required
 def editItem(item_name):
-    if 'username' not in login_session:
-        return redirect('/login')
-
+    '''
+    GET: Display Edit Form
+    POST: Update Item
+    '''
     item = session.query(CategoryItem).filter_by(name=urllib2.unquote(item_name)).one()
     categories = session.query(Category)
 
     if item.user_id != login_session['user_id']:
-        return "<script>function myFunction() {alert('You are not authorized to edit this item. Please create your own item in order to edit.');}</script><body onload='myFunction()''>"
+        return """<script>function myFunction() {
+        alert('You are not authorized to edit this item. 
+        Please create your own item in order to edit.');}
+        </script><body onload='myFunction()''>"""
     
     if request.method == 'POST':
         item.name = request.form.get('name', item.name)
@@ -330,17 +358,20 @@ def editItem(item_name):
         return render_template('edit-item.html', item=item, categories=categories)
 
 
-# GET: Display Delete Confirmation Form
-# POST: Delete Item
 @app.route('/catalog/<string:item_name>/delete', methods=['GET', 'POST'])
+@login_required
 def deleteItem(item_name):
-    if 'username' not in login_session:
-        return redirect('/login')
-
+    '''
+    GET: Display Delete Confirmation Form
+    POST: Delete Item
+    '''
     item = session.query(CategoryItem).filter_by(name=urllib2.unquote(item_name)).one()
 
     if item.user_id != login_session['user_id']:
-        return "<script>function myFunction() {alert('You are not authorized to delete this item. Please create your own item in order to delete.');}</script><body onload='myFunction()''>"
+        return """<script>function myFunction() {
+        alert('You are not authorized to delete this item. 
+        Please create your own item in order to delete.');}
+        </script><body onload='myFunction()''>"""
 
     if request.method == 'POST':
         category = session.query(Category).filter_by(id=item.category_id).one()
@@ -353,13 +384,13 @@ def deleteItem(item_name):
         return render_template('delete-item.html', item=item)
 
 
-# GET: Display Add Form
-# POST: Create New Item
 @app.route('/catalog/add', methods=['GET', 'POST'])
+@login_required
 def addItem():
-    if 'username' not in login_session:
-        return redirect('/login')
-
+    '''
+    GET: Display Add Form
+    POST: Create New Item
+    '''
     categories = session.query(Category)
 
     if request.method == 'POST':
@@ -367,7 +398,8 @@ def addItem():
         description = request.form.get('description', '')
         category_id = request.form.get('category_id', '')
 
-        newItem = CategoryItem(name=name, description=description, category_id=category_id, user_id=login_session['user_id'])
+        newItem = CategoryItem(name=name, description=description,
+            category_id=category_id, user_id=login_session['user_id'])
 
         session.add(newItem)
         session.commit()
@@ -378,7 +410,7 @@ def addItem():
 
 if __name__ == '__main__':
     app.secret_key = 'super_secret_key'
-    app.debug = True
+    #app.debug = True
     app.run(host='0.0.0.0', port=5000)
 
 
