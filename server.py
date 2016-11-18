@@ -1,4 +1,5 @@
-from flask import Flask, render_template, request, redirect, jsonify, url_for, flash, send_from_directory
+from flask import Flask, Session, render_template, request, redirect, jsonify, url_for, flash, send_from_directory
+#from flask.ext.session import Session
 #from sqlalchemy import create_engine, asc
 #from sqlalchemy.orm import sessionmaker
 from flask_sqlalchemy import SQLAlchemy
@@ -17,6 +18,8 @@ from functools import wraps
 
 app = Flask(__name__)
 
+sess = Session()
+
 CLIENT_ID = json.loads(
     open('client_secrets.json', 'r').read())['web']['client_id']
 APPLICATION_NAME = "Catalog App"
@@ -26,6 +29,8 @@ APPLICATION_NAME = "Catalog App"
 #engine = create_engine('sqlite:///catalog.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///catalog.db'
 db = SQLAlchemy(app)
+
+app.secret_key = 'super_secret_key'
 
 #Base.metadata.bind = engine
 
@@ -411,7 +416,6 @@ def addItem():
         return render_template('add-item.html', categories=categories)
 
 if __name__ == '__main__':
-    app.secret_key = 'super_secret_key'
     app.debug = True
     app.run(host='0.0.0.0', port=5000)
 
