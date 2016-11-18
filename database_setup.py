@@ -1,26 +1,30 @@
-from sqlalchemy import Column, ForeignKey, Integer, String, UnicodeText
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from sqlalchemy import create_engine
+# from sqlalchemy import Column, ForeignKey, Integer, String, UnicodeText
+# from sqlalchemy.ext.declarative import declarative_base
+# from sqlalchemy.orm import relationship
+# from sqlalchemy import create_engine
 
-Base = declarative_base()
+from flask import Flask
+from flask_sqlalchemy import SQLAlchemy
 
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///catalog.db'
+db = SQLAlchemy(app)
 
-class User(Base):
+class User(db.Model):
     __tablename__ = 'user'
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(250), nullable=False)
-    email = Column(String(250), nullable=False)
-    picture = Column(String(250))
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250), nullable=False)
+    email = db.Column(db.String(250), nullable=False)
+    picture = db.Column(db.String(250))
 
 
-class Category(Base):
+class Category(db.Model):
     __tablename__ = 'category'
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(250), nullable=False)
-    description = Column(UnicodeText(10000), nullable=False)
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250), nullable=False)
+    description = db.Column(db.UnicodeText(10000), nullable=False)
 
     @property
     def serialize(self):
@@ -31,16 +35,16 @@ class Category(Base):
         }
 
 
-class CategoryItem(Base):
+class CategoryItem(db.Model):
     __tablename__ = 'category_item'
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(250), nullable=False)
-    category_id = Column(Integer, ForeignKey('category.id'))
-    category = relationship(Category)
-    description = Column(UnicodeText(10000), nullable=False)
-    user_id = Column(Integer, ForeignKey('user.id'))
-    user = relationship(User)
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(250), nullable=False)
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'))
+    category = db.relationship(Category)
+    description = db.Column(db.UnicodeText(10000), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user = db.relationship(User)
 
     @property
     def serialize(self):
@@ -50,7 +54,5 @@ class CategoryItem(Base):
             'id': self.id,
         }
 
+db.create_all()
 
-engine = create_engine('sqlite:///catalog.db')
-
-Base.metadata.create_all(engine)
